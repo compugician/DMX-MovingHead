@@ -5,13 +5,14 @@ import time
 import os
 import math
 import serial
-
+import picamera
+from picamera.array import PiRGBArray
 
 ARDUINO_SERIAL_PORT_PI = '/dev/ttyACM0'
 ARDUINO_SERIAL_PORT_MAC = '/dev/tty.usbmodem1411'
 ARDUINO_BAUD = 115200
 
-CAMERA_TO_USE = 1 # For Mac only! 0 = built-in; 1 = USB
+CAMERA_TO_USE = 0 # For Mac only! 0 = built-in; 1 = USB
 
 TRACKBAR_WINDOW_NAME = "Trackbars"
 GAUSSIAN_BLUR_TRACKBAR_NAME = "Gaussian blur radius"
@@ -54,8 +55,8 @@ def calculate_dimensions(frame):
 	global width, height, widthDiv2, heightDiv2
 	width = np.size(frame, 1)
 	height = np.size(frame, 0)
-	widthDiv2 = math.floor(width/2)
-	heightDiv2 = math.floor(height/2)
+	widthDiv2 = int(math.floor(width/2))
+	heightDiv2 = int(math.floor(height/2))
 
 
 def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount):
@@ -87,9 +88,10 @@ def is_pi():
 
 def init_camera():
 	if is_pi():
-		camera = PiCamera()
+		camera = picamera.PiCamera()
 		camera.resolution = (640, 480)
 		camera.framerate = 32
+                global rawCapture
 		rawCapture = PiRGBArray(camera, size=(640, 480))
 
 		return camera
@@ -99,6 +101,15 @@ def init_camera():
 		camera.set(cv2.CAP_PROP_EXPOSURE, 0.1)
 		return camera
 
+def get_frame(camera):
+    if is_pi():
+        rawCapture.truncate()
+        rawCapture.seek(0)
+        camera.capture(rawCapture, format="bgr")
+        return rawCapture.array
+    else:        
+        return camera.read()
+    
 
 def main():
 
@@ -122,7 +133,7 @@ def main():
     setup_trackbars()
 
     while(True):
-        ret, frame = camera.read()
+        frame = get_frame(camera)
         frameCount += 1
     
         orig = frame.copy()
@@ -142,7 +153,7 @@ def main():
         maxLocConverted = convert_coordinates(maxLoc)
 
         # Send the brightest pixel to the Arduino
-        if (frameCount % 25) == 0:
+        if ((arduino.isOpen) and ((frameCount % 25) == 0)):
         	frameCount = 0
         	# arduino.write(str.encode(str(-2 * maxLocConverted[0])))
         	# arduino.write(str.encode('640'))
