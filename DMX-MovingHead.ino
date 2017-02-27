@@ -23,6 +23,11 @@
 
 #define Y_FINE_TO_X_FINE_RATIO 33/11.75
 
+#define MIN_X_GROSS 0
+#define MAX_X_GROSS 85
+#define MIN_Y_GROSS 0
+#define MAX_Y_GROSS 131
+
 void resetLamp() {
   DmxSimple.write(CH_RESET,255);
   delay(3000);
@@ -35,6 +40,8 @@ void setup() {
   //resetLamp();
   lightsOn();
   //while (true) {}
+  gotoXY(0,0);
+  delay(1500);
 }
 //
 //int fromDegreesX(float degrees) {
@@ -109,9 +116,9 @@ void moveIncremental(int x, int y) {
   }
 
   setXFine(newXFine);
-  setXGross(newXGross);
+  setXGross(min(MAX_X_GROSS,max(MIN_X_GROSS,newXGross)));
   setYFine(newYFine);
-  setYGross(newYGross);
+  setYGross(min(MAX_Y_GROSS,max(MIN_Y_GROSS,newYGross)));
 }
 
 
@@ -161,29 +168,32 @@ void lightsOff() {
   DmxSimple.write(6, 0);
 }
 
+String inString = "";    // string to hold input
+void handleInput() {
+  while (Serial.available() > 0) {
+    int inChar = Serial.read();
+    inString += (char)inChar;
+
+    if (inChar == '\n') {
+      if ('c'==inString[0]) {
+        gotoXY(0,0);
+      } else if ('x'==inString[0]) {
+        int steps = inString.substring(1).toInt();
+        moveIncremental(steps, 0);
+      } else if ('y'==inString[0]) {
+        int steps = inString.substring(1).toInt();
+        moveIncremental(0, steps);        
+      } else {
+        Serial.print(" Unknown command: '");
+        Serial.print(inString);
+        Serial.println("'");
+      }
+      // clear the string for new input:
+      inString = "";
+    }
+  }
+}
 
 void loop() {
-  // put your main code here, to run repeatedly:
-//  int brightness;
-//
-//  for (brightness = 0; brightness <= 255; brightness++) {
-//    DmxSimple.write(1, brightness);
-//    delay(10);
-//  }
-  
-//  DmxSimple.write(1, 0);
-//  delay(1000);
-//  DmxSimple.write(1, fromDegrees(180));
-//  delay(1000);
-
-//  DmxSimple.write(Y_AXIS_CHANNEL, fromDegreesY(convertWorldDegreesY(180)));
-gotoXY(0,0);
-delay(1500);
-moveIncremental(200,200 * Y_FINE_TO_X_FINE_RATIO);
-delay(3500);
-moveIncremental(-400,-400 * Y_FINE_TO_X_FINE_RATIO);
-delay(3500);
-moveIncremental(200,200 * Y_FINE_TO_X_FINE_RATIO);
-delay(3500);
-
+  handleInput();
 }
