@@ -25,6 +25,7 @@ PIXELS_PER_Y = 25.6
 
 OVERLAY_COLOR = (255, 255, 255)
 
+GRBL_JOG_OVERRIDE = 0x85
 
 def get_arguments():
     ap = argparse.ArgumentParser()
@@ -108,8 +109,8 @@ def init_camera():
         return camera
     else:
         camera = cv2.VideoCapture(CAMERA_TO_USE)
-#        camera.set(cv2.CAP_PROP_GAIN, 0.1)
-#        camera.set(cv2.CAP_PROP_EXPOSURE, 0.1)
+        camera.set(cv2.CAP_PROP_GAIN, 0.1)
+        camera.set(cv2.CAP_PROP_EXPOSURE, 0.1)
 #        camera.set(cv2.CAP_PROP_FRAME_WIDTH, 960)
 #        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
         return camera
@@ -146,15 +147,20 @@ def processFrame():
     maxLocConverted = convert_coordinates(maxLoc)
 
     # Send the brightest pixel to the Arduino
-    if (frameCount % 4) == 0:
+    if (frameCount % 1) == 0:
         frameCount = 0
 
         xMove = maxLocConverted[0]/PIXELS_PER_X
         yMove = maxLocConverted[1]/PIXELS_PER_Y
 
         shouldMove = False
-        command = 'G0 G91 '
-        if (abs(xMove)>1):
+#        command = '! \x18 G0 G91 '
+
+        command ='$J=G91 F2000 '
+        if (abs(xMove)>0.3):
+            if (abs(xMove)<3):
+                xMove = xMove * 0.25
+                print "shrinking x"
             command = command +  'X' +str(round(xMove, 2)) + ' '
             shouldMove = True
         if (abs(yMove)>0.35):
@@ -163,11 +169,11 @@ def processFrame():
                 print "shrinking y"
             command = command + ' Y' +str(round(yMove, 2))
             shouldMove = True
-        command = command + '\r\n'
 
         if (shouldMove):
             print command
-            arduino.write(command.encode())
+            arduino.write(chr(GRBL_JOG_OVERRIDE))
+            arduino.write(command.encode('latin_1')+ '\n')
 
         # arduino.write(str.encode(str(-2 * maxLocConverted[0])))
         # arduino.write(str.encode('640'))
