@@ -143,15 +143,15 @@ def main():
 
         # Send the brightest pixel to the Arduino
         if (frameCount % 25) == 0:
-        	frameCount = 0
-        	# arduino.write(str.encode(str(-2 * maxLocConverted[0])))
-        	# arduino.write(str.encode('640'))
-        	arduino.write(str.encode('x'))
-        	arduino.write(str(-1.4 * maxLocConverted[0]).encode())
-        	arduino.write(str.encode('\n'))
-#        	arduino.write(str.encode('y'))
-#        	arduino.write(str(2 * maxLocConverted[1]).encode())
-#       	arduino.write(str.encode('\n'))
+            frameCount = 0
+            # arduino.write(str.encode(str(-2 * maxLocConverted[0])))
+            # arduino.write(str.encode('640'))
+            arduino.write(str.encode('x'))
+            arduino.write(str(-1.4 * maxLocConverted[0]).encode())
+            arduino.write(str.encode('\n'))
+            arduino.write(str.encode('y'))
+            arduino.write(str(2 * maxLocConverted[1]).encode())
+            arduino.write(str.encode('\n'))
 
         add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount)
 
