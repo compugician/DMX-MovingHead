@@ -153,10 +153,20 @@ def processFrame():
         xMove = maxLocConverted[0]/PIXELS_PER_X
         yMove = maxLocConverted[1]/PIXELS_PER_Y
 
+        #TODO: normalize x and y distance such that feedrate makes sense. simply 'steps' for both here isn't really what makes sense because the velocity on eahc is different
+        distance = (xMove*xMove + yMove*yMove)**(0.5)
+
         shouldMove = False
 #        command = '! \x18 G0 G91 '
 
-        command ='$J=G91 F2000 '
+        # feedrate = 6000
+        # if (abs(xMove)<3 or abs(yMove)<2):
+        #     feedrate = 2000
+
+        #such that at 30 it's 6000
+        feedrate = 1000 + 166*distance 
+
+        command ='$J=G91 F'+str(feedrate)+' '
         if (abs(xMove)>0.3):
             if (abs(xMove)<3):
                 xMove = xMove * 0.25
@@ -209,7 +219,7 @@ def main():
     args = get_arguments()
 
     global arduino
-    arduino = serial.Serial(args["port"], ARDUINO_BAUD, timeout=.1)
+    arduino = serial.Serial(args["port"], ARDUINO_BAUD, timeout=.05)
 
     # Video stream object
     global camera 
@@ -223,10 +233,14 @@ def main():
     while(True):
         try:
             processFrame()
+            while arduino.in_waiting:  # Or: while ser.inWaiting():
+                print "grbl: "+arduino.readline()
         except Exception as e: 
             print "Exception: " + str(e)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
+            print "Goodbye!"
+            arduino.close()
             break
 
 if __name__ == '__main__':
