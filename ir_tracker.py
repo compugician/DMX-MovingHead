@@ -97,6 +97,7 @@ def init_camera():
 		camera = cv2.VideoCapture(CAMERA_TO_USE)
 		camera.set(cv2.CAP_PROP_GAIN, 0.1)
 		camera.set(cv2.CAP_PROP_EXPOSURE, 0.1)
+		# camera.set(cv2.CAP_PROP_FPS, 1)
 		return camera
 
 
@@ -142,7 +143,7 @@ def main():
         maxLocConverted = convert_coordinates(maxLoc)
 
         # Send the brightest pixel to the Arduino
-        if (frameCount % 25) == 0:
+        if (frameCount % 15) == 0:
             frameCount = 0
             # arduino.write(str.encode(str(-2 * maxLocConverted[0])))
             # arduino.write(str.encode('640'))
@@ -154,6 +155,11 @@ def main():
             arduino.write(str.encode('\n'))
 
         add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount)
+
+
+        print(time.strftime("%S", time.gmtime()))
+        print(str(maxLoc) + " , " + str(maxVal))
+
 
         #cv2.resize(frame, (800, 800))
         #cv2.imshow('frame',frame)
