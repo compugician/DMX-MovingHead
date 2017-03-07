@@ -17,6 +17,12 @@ TRACKBAR_WINDOW_NAME = "Trackbars"
 GAUSSIAN_BLUR_TRACKBAR_NAME = "Gaussian blur radius"
 GAUSSIAN_BLUR_MAX_RADIUS = 199
 GAUSSIAN_BLUR_INITIAL_RADIUS = 32
+FEEDRATE_BASE_TRACKBAR_NAME = "Feedrate base"
+FEEDRATE_BASE_MAX_VALUE = 4000
+FEEDRATE_BASE_INITIAL_VALUE = 1000
+FEEDRATE_COEFFICIENT_TRACKBAR_NAME = "Feedrate coefficient"
+FEEDRATE_COEFFICIENT_MAX_VALUE = 3000
+FEEDRATE_COEFFICIENT_INITIAL_VALUE = 167
 
 THRESH_VAL = 64
 
@@ -46,13 +52,17 @@ def setup_trackbars():
     cv2.namedWindow(TRACKBAR_WINDOW_NAME, 0)
     cv2.createTrackbar(GAUSSIAN_BLUR_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME,
                        GAUSSIAN_BLUR_INITIAL_RADIUS, GAUSSIAN_BLUR_MAX_RADIUS, callback)
+    cv2.createTrackbar(FEEDRATE_BASE_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME,
+                       FEEDRATE_BASE_INITIAL_VALUE, FEEDRATE_BASE_MAX_VALUE, callback)
+    cv2.createTrackbar(FEEDRATE_COEFFICIENT_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME,
+                       FEEDRATE_COEFFICIENT_INITIAL_VALUE, FEEDRATE_COEFFICIENT_MAX_VALUE, callback)
 
 
-def get_trackbar_value():
+def get_trackbar_value(trackbar_name):
     value = cv2.getTrackbarPos(
-        GAUSSIAN_BLUR_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME)
+        trackbar_name, TRACKBAR_WINDOW_NAME)
 
-    if value % 2 == 0:
+    if trackbar_name == GAUSSIAN_BLUR_TRACKBAR_NAME and (value % 2 == 0):
         value += 1
 
     return value
@@ -68,13 +78,21 @@ def calculate_dimensions(frame):
     heightDiv2 = int(math.floor(height / 2))
 
 
-def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount):
+def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase, feedrateCoefficient):
     # Gaussian radius
-    cv2.putText(frame, str(radius), (10, 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 2, OVERLAY_COLOR)
+    cv2.putText(frame, str(radius), (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
+
+    # Feedrate base
+    cv2.putText(frame, str(feedrateBase), (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
+
+    # Feedrate coefficient
+    cv2.putText(frame, str(feedrateCoefficient), (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
 
     # Mark the brightest section of the frame
-    cv2.circle(frame, maxLoc, radius, (255, 0, 0), 2)
+    cv2.circle(frame, maxLoc, radius, (255, 0, 0), 1)
 
     # Crosshair
     cv2.line(frame, (widthDiv2, 0), (widthDiv2, height), (255, 255, 255), 1)
@@ -83,12 +101,12 @@ def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount):
     # Brightest section coordinates
     #cv2.putText(frame, str(maxLoc), (10, height - 10),
     #            cv2.FONT_HERSHEY_SIMPLEX, 2, OVERLAY_COLOR)
-    cv2.putText(frame, str(maxLocConverted), (width - 550, height - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 2, OVERLAY_COLOR)
+    cv2.putText(frame, str(maxLocConverted), (10, height - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
 
     # Frame Count
-    cv2.putText(frame, str(frameCount), (width - 200, 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 2, OVERLAY_COLOR)
+    cv2.putText(frame, str(frameCount), (width - 50, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
 
 
 def convert_coordinates(maxLoc):
@@ -132,7 +150,7 @@ def processFrame():
     if isDimensionsCalculated == False:
         calculate_dimensions(frame)
 
-    radius = get_trackbar_value()
+    radius = get_trackbar_value(GAUSSIAN_BLUR_TRACKBAR_NAME)
 
     # apply a Gaussian blur to the image then find the brightest region
     #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -164,24 +182,26 @@ def processFrame():
         #     feedrate = 2000
 
         #such that at 30 it's 6000
-        feedrate = 1000 + 166*distance 
+        feedrateBase = get_trackbar_value(FEEDRATE_BASE_TRACKBAR_NAME)
+        feedrateCoefficient = get_trackbar_value(FEEDRATE_COEFFICIENT_TRACKBAR_NAME)
+        feedrate = feedrateBase + distance*feedrateCoefficient
 
         command ='$J=G91 F'+str(feedrate)+' '
         if (abs(xMove)>0.3):
             if (abs(xMove)<3):
                 xMove = xMove * 0.25
-                print "shrinking x"
+                print("shrinking x")
             command = command +  'X' +str(round(xMove, 2)) + ' '
             shouldMove = True
         if (abs(yMove)>0.35):
             if (abs(yMove<1)):
                 yMove = yMove * 0.25
-                print "shrinking y"
+                print("shrinking y")
             command = command + ' Y' +str(round(yMove, 2))
             shouldMove = True
 
         if (shouldMove):
-            print command
+            print(command)
             arduino.write(chr(GRBL_JOG_OVERRIDE))
             arduino.write(command.encode('latin_1')+ '\n')
 
@@ -195,7 +215,7 @@ def processFrame():
 #           arduino.write(str.encode('\n'))
 
 
-    add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount)
+    add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase, feedrateCoefficient)
     #add_overlay(frame, 5, (0,0), 0, frameCount)
 
     #cv2.resize(frame, (800, 800))
@@ -214,7 +234,7 @@ def main():
 
 
     cv2.namedWindow("output", cv2.WINDOW_NORMAL)
-    cv2.moveWindow("output", 0, 0)
+    cv2.moveWindow("output", 0, 150)
 
     args = get_arguments()
 
@@ -234,12 +254,12 @@ def main():
         try:
             processFrame()
             while arduino.in_waiting:  # Or: while ser.inWaiting():
-                print "grbl: "+arduino.readline()
+                print("grbl: "+arduino.readline())
         except Exception as e: 
-            print "Exception: " + str(e)
+            print("Exception: " + str(e))
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            print "Goodbye!"
+            print("Goodbye!")
             arduino.close()
             break
 
