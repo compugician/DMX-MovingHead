@@ -5,6 +5,8 @@ import time
 import os
 import math
 import serial
+import traceback
+from pidController import PID
 
 
 ARDUINO_SERIAL_PORT_PI = '/dev/ttyACM0'
@@ -19,10 +21,10 @@ GAUSSIAN_BLUR_MAX_RADIUS = 199
 GAUSSIAN_BLUR_INITIAL_RADIUS = 32
 FEEDRATE_BASE_TRACKBAR_NAME = "Feedrate base"
 FEEDRATE_BASE_MAX_VALUE = 4000
-FEEDRATE_BASE_INITIAL_VALUE = 1000
-FEEDRATE_COEFFICIENT_TRACKBAR_NAME = "Feedrate coefficient"
-FEEDRATE_COEFFICIENT_MAX_VALUE = 3000
-FEEDRATE_COEFFICIENT_INITIAL_VALUE = 167
+FEEDRATE_BASE_INITIAL_VALUE = 2000
+FEEDRATE_DISTANCE_COEFFICIENT_TRACKBAR_NAME = "Feedrate distance coefficient"
+FEEDRATE_DISTANCE_COEFFICIENT_MAX_VALUE = 3000
+FEEDRATE_DISTANCE_COEFFICIENT_INITIAL_VALUE = 167
 
 THRESH_VAL = 64
 
@@ -54,8 +56,8 @@ def setup_trackbars():
                        GAUSSIAN_BLUR_INITIAL_RADIUS, GAUSSIAN_BLUR_MAX_RADIUS, callback)
     cv2.createTrackbar(FEEDRATE_BASE_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME,
                        FEEDRATE_BASE_INITIAL_VALUE, FEEDRATE_BASE_MAX_VALUE, callback)
-    cv2.createTrackbar(FEEDRATE_COEFFICIENT_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME,
-                       FEEDRATE_COEFFICIENT_INITIAL_VALUE, FEEDRATE_COEFFICIENT_MAX_VALUE, callback)
+    cv2.createTrackbar(FEEDRATE_DISTANCE_COEFFICIENT_TRACKBAR_NAME, TRACKBAR_WINDOW_NAME,
+                       FEEDRATE_DISTANCE_COEFFICIENT_INITIAL_VALUE, FEEDRATE_DISTANCE_COEFFICIENT_MAX_VALUE, callback)
 
 
 def get_trackbar_value(trackbar_name):
@@ -78,7 +80,7 @@ def calculate_dimensions(frame):
     heightDiv2 = int(math.floor(height / 2))
 
 
-def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase, feedrateCoefficient):
+def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase, feedrateDistanceCoefficient, distance, prevDistance):
     # Gaussian radius
     cv2.putText(frame, str(radius), (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
@@ -87,8 +89,8 @@ def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase
     cv2.putText(frame, str(feedrateBase), (10, 60),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
 
-    # Feedrate coefficient
-    cv2.putText(frame, str(feedrateCoefficient), (10, 90),
+    # Feedrate distance coefficient
+    cv2.putText(frame, str(feedrateDistanceCoefficient), (10, 90),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
 
     # Mark the brightest section of the frame
@@ -106,6 +108,14 @@ def add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase
 
     # Frame Count
     cv2.putText(frame, str(frameCount), (width - 50, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
+
+    # prev and current distance
+    if prevDistance is not None:
+    	distanceString = "%.2f"%distance+" / "+"%.2f"%prevDistance
+    else:
+   		distanceString = "%.2f"%distance+" / "+str(prevDistance)
+    cv2.putText(frame, distanceString, (width - 350, height - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, OVERLAY_COLOR)
 
 
@@ -137,6 +147,8 @@ def processFrame():
     ret, frame = camera.read()
     global frameCount 
     frameCount +=1 
+    global lastFrameMaxLocConverted
+    prevDistance = None
 
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -168,11 +180,21 @@ def processFrame():
     if (frameCount % 1) == 0:
         frameCount = 0
 
-        xMove = maxLocConverted[0]/PIXELS_PER_X
+        X_FACTOR = 0.5 # //TAL_QUICK_HACK
+        # current frame calculations
+        xMove = maxLocConverted[0]/PIXELS_PER_X * X_FACTOR
         yMove = maxLocConverted[1]/PIXELS_PER_Y
 
         #TODO: normalize x and y distance such that feedrate makes sense. simply 'steps' for both here isn't really what makes sense because the velocity on eahc is different
         distance = (xMove*xMove + yMove*yMove)**(0.5)
+
+        if lastFrameMaxLocConverted is not None:
+	        # last frame calculations
+	        prev_xMove = lastFrameMaxLocConverted[0]/PIXELS_PER_X
+	        prev_yMove = lastFrameMaxLocConverted[1]/PIXELS_PER_Y
+
+	        #TODO: normalize x and y distance such that feedrate makes sense. simply 'steps' for both here isn't really what makes sense because the velocity on eahc is different
+	        prevDistance = (prev_xMove*prev_xMove + prev_yMove*prev_yMove)**(0.5)
 
         shouldMove = False
 #        command = '! \x18 G0 G91 '
@@ -182,9 +204,43 @@ def processFrame():
         #     feedrate = 2000
 
         #such that at 30 it's 6000
-        feedrateBase = get_trackbar_value(FEEDRATE_BASE_TRACKBAR_NAME)
-        feedrateCoefficient = get_trackbar_value(FEEDRATE_COEFFICIENT_TRACKBAR_NAME)
-        feedrate = feedrateBase + distance*feedrateCoefficient
+        feedrateBase = 5000
+        # feedrateDistanceCoefficient = get_trackbar_value(FEEDRATE_DISTANCE_COEFFICIENT_TRACKBAR_NAME)
+        if prevDistance is not None:
+        	speed = abs(prevDistance - distance)
+        else:
+        	speed = 1
+
+        speedFactor = (min(speed, 30)/30)
+        distanceFactor = 1/2*distance if distance > 0 else 0
+
+        feedrate =  feedrateBase - ((0.5*speedFactor + 0.5*distanceFactor)*feedrateBase)
+        print("Amnon," + str(prevDistance) + "," + str(distance))
+
+        feedrateDistanceCoefficient = 0
+
+
+        #print("***************************************** " + str((1 / (feedrateSpeedCoefficient * speed))))
+        # feedrate = feedrateBase + distance*feedrateDistanceCoefficient
+
+
+
+		# feedrateBase = get_trackbar_value(FEEDRATE_BASE_TRACKBAR_NAME)
+  #       feedrateDistanceCoefficient = get_trackbar_value(FEEDRATE_DISTANCE_COEFFICIENT_TRACKBAR_NAME)
+  #       if prevDistance is not None:
+  #       	speed = prevDistance - distance
+  #       else:
+  #       	speed = 1
+  #       proportional = abs((feedrateBase + distance*feedrateDistanceCoefficient))
+
+  #       speedFactor = (speed/30)
+  #       distanceFactor = 1/distance if distance > 0 else 0
+
+  #       feedrate =  proportional - speedFactor*distanceFactor*proportional
+
+
+
+
 
         command ='$J=G91 F'+str(feedrate)+' '
         if (abs(xMove)>0.3):
@@ -215,8 +271,9 @@ def processFrame():
 #           arduino.write(str.encode('\n'))
 
 
-    add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase, feedrateCoefficient)
+    add_overlay(frame, radius, maxLoc, maxLocConverted, frameCount, feedrateBase, feedrateDistanceCoefficient, distance, prevDistance)
     #add_overlay(frame, 5, (0,0), 0, frameCount)
+    lastFrameMaxLocConverted = maxLocConverted
 
     #cv2.resize(frame, (800, 800))
     # cv2.imshow('frame',frame)
@@ -250,6 +307,10 @@ def main():
 
     setup_trackbars()
 
+    # Move lastFrameMaxLocConverted to some program init
+    global lastFrameMaxLocConverted
+    lastFrameMaxLocConverted = None
+
     while(True):
         try:
             processFrame()
@@ -257,6 +318,7 @@ def main():
                 print("grbl: "+arduino.readline())
         except Exception as e: 
             print("Exception: " + str(e))
+            traceback.print_exc()
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Goodbye!")
