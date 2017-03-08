@@ -6,6 +6,7 @@ import os
 import math
 import serial
 import traceback
+from pidController import PID
 
 
 ARDUINO_SERIAL_PORT_PI = '/dev/ttyACM0'
@@ -185,7 +186,10 @@ def processFrame():
         #such that at 30 it's 6000
         feedrateBase = get_trackbar_value(FEEDRATE_BASE_TRACKBAR_NAME)
         feedrateCoefficient = get_trackbar_value(FEEDRATE_COEFFICIENT_TRACKBAR_NAME)
-        feedrate = feedrateBase + distance*feedrateCoefficient
+        # feedrate = feedrateBase + distance*feedrateCoefficient
+
+        feedrate = abs(pidController.update(distance) * 100)
+        print("Amnon ******************* " + str(feedrate))
 
         command ='$J=G91 F'+str(feedrate)+' '
         if (abs(xMove)>0.3):
@@ -250,6 +254,9 @@ def main():
     time.sleep(2)
 
     setup_trackbars()
+
+    global pidController
+    pidController = PID()
 
     while(True):
         try:
