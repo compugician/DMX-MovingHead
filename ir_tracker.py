@@ -5,6 +5,7 @@ import time
 import os
 import math
 import serial
+import traceback
 
 
 ARDUINO_SERIAL_PORT_PI = '/dev/ttyACM0'
@@ -257,6 +258,7 @@ def main():
                 print("grbl: "+arduino.readline())
         except Exception as e: 
             print("Exception: " + str(e))
+            traceback.print_exc()
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Goodbye!")
